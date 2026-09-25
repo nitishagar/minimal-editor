@@ -1,48 +1,17 @@
 import * as monaco from 'monaco-editor';
+// Note: a cherry-picked editor.api + per-language import was tried and
+// reverted — monaco 0.52's internal entry names are unstable (no json/c
+// basic-language entries; language services need worker routing) and the
+// boot saving (~100ms) wasn't worth the fragility. Language impls already
+// code-split into lazy chunks (see dist/assets).
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import './styles.css';
+import { api, e2eReady, e2eReport } from './api';
 
 self.MonacoEnvironment = { getWorker: () => new editorWorker() };
 
-// ---- Preload API surface (see electron/preload.cjs) ----
-interface TreeNode {
-  type: 'dir' | 'file';
-  name: string;
-  path: string;
-  size?: number;
-  children?: TreeNode[];
-}
-interface ReadResult {
-  content: string | null;
-  truncated: boolean;
-  binary: boolean;
-  size: number;
-}
-interface ChangedFile {
-  code: string;
-  path: string;
-}
-interface SearchHit {
-  path: string;
-  line: number;
-  preview: string;
-}
-interface Api {
-  openFolder: () => Promise<string | null>;
-  listDir: (root: string) => Promise<TreeNode[]>;
-  readFile: (root: string, rel: string) => Promise<ReadResult>;
-  writeFile: (root: string, rel: string, content: string) => Promise<boolean>;
-  search: (root: string, query: string) => Promise<SearchHit[]>;
-  gitIsRepo: (root: string) => Promise<boolean>;
-  gitStatus: (root: string) => Promise<ChangedFile[]>;
-  gitShowHead: (root: string, rel: string) => Promise<string>;
-  gitBranch: (root: string) => Promise<string>;
-}
-declare global {
-  interface Window {
-    api: Api;
-  }
-}
+// ---- Backend API surface (see src/api.ts; Tauri commands in src-tauri) ----
+import type { TreeNode, ReadResult, ChangedFile, SearchHit } from './api';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -88,15 +57,24 @@ const editor = monaco.editor.create(viewHost, {
   scrollBeyondLastLine: false,
   renderWhitespace: 'boundary',
 });
-const diffEditor = monaco.editor.createDiffEditor(diffHost, {
-  theme: 'vs-dark',
-  automaticLayout: true,
-  minimap: { enabled: false },
-  fontSize: 13,
-  fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
-  scrollBeyondLastLine: false,
-  renderSideBySide: true,
-});
+// Diff editor is created lazily on first openDiff: building two Monaco
+// instances at boot roughly doubles startup cost for a view most sessions
+// may never open.
+let diffEditor: monaco.editor.IStandaloneDiffEditor | null = null;
+function getDiffEditor(): monaco.editor.IStandaloneDiffEditor {
+  if (!diffEditor) {
+    diffEditor = monaco.editor.createDiffEditor(diffHost, {
+      theme: 'vs-dark',
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+      scrollBeyondLastLine: false,
+      renderSideBySide: true,
+    });
+  }
+  return diffEditor;
+}
 
 function setStatus(left: string, right = '') {
   $('status-left').textContent = left;
@@ -246,7 +224,7 @@ async function openFile(path: string, line?: number) {
   if (!m) {
     let res: ReadResult;
     try {
-      res = await window.api.readFile(root, path);
+      res = await api.readFile(root, path);
     } catch (e) {
       setStatus(`Cannot open ${path}: ${(e as Error).message}`);
       return;
@@ -262,7 +240,7 @@ async function openFile(path: string, line?: number) {
     m = monaco.editor.createModel(res.content, langOf(path), monaco.Uri.parse(`file:///${path}`));
     models.set(path, m);
     if (!tabs.find((t) => t.path === path)) tabs.push({ path, saved: res.content });
-    m.onDidChangeModelContent(() => renderTabs());
+    m.onDidChangeContent(() => renderTabs());
   }
   active = path;
   editor.setModel(m);
@@ -279,7 +257,7 @@ async function openDiff(path: string) {
   active = path;
   let current = '';
   try {
-    const res = await window.api.readFile(root, path);
+    const res = await api.readFile(root, path);
     if (res.binary) {
       setStatus(`${path}: binary file, diff not shown`);
       return;
@@ -292,17 +270,18 @@ async function openDiff(path: string) {
   } catch {
     current = '';
   }
-  const original = await window.api.gitShowHead(root, path).catch(() => '');
+  const original = await api.gitShowHead(root, path).catch(() => '');
   const lang = langOf(path);
+  const de = getDiffEditor();
   // Dispose the previous diff models to avoid leaking one pair per navigation.
-  const prev = diffEditor.getModel();
+  const prev = de.getModel();
   if (prev) {
     prev.original.dispose();
     prev.modified.dispose();
   }
   const origModel = monaco.editor.createModel(original, lang);
   const modModel = monaco.editor.createModel(current, lang);
-  diffEditor.setModel({ original: origModel, modified: modModel });
+  de.setModel({ original: origModel, modified: modModel });
   syncView();
   renderTabs();
   renderSidebar();
@@ -315,7 +294,7 @@ function syncView() {
   diffHost.style.display = showDiff ? 'block' : 'none';
   showEmpty(active === null);
   editor.layout();
-  diffEditor.layout();
+  diffEditor?.layout();
 }
 
 function stepChange(dir: 1 | -1) {
@@ -334,11 +313,11 @@ async function openRoot(p: string) {
   for (const m of models.values()) m.dispose();
   models.clear();
   editor.setModel(null);
-  const prevDiff = diffEditor.getModel();
+  const prevDiff = diffEditor?.getModel();
   if (prevDiff) {
     prevDiff.original.dispose();
     prevDiff.modified.dispose();
-    diffEditor.setModel(null);
+    diffEditor!.setModel(null);
   }
   await refreshAll();
 }
@@ -347,10 +326,10 @@ async function refreshAll() {
   if (!root) return;
   setStatus('Loading…');
   try {
-    tree = await window.api.listDir(root);
-    const repo = await window.api.gitIsRepo(root);
-    changed = repo ? await window.api.gitStatus(root) : [];
-    const branch = repo ? await window.api.gitBranch(root) : '';
+    tree = await api.listDir(root);
+    const repo = await api.gitIsRepo(root);
+    changed = repo ? await api.gitStatus(root) : [];
+    const branch = repo ? await api.gitBranch(root) : '';
     renderSidebar();
     setStatus(
       root,
@@ -369,18 +348,18 @@ async function saveActive() {
   }
   const m = models.get(active);
   if (!m) return;
-  await window.api.writeFile(root, active, m.getValue());
+  await api.writeFile(root, active, m.getValue());
   const t = tabs.find((t) => t.path === active);
   if (t) t.saved = m.getValue();
   renderTabs();
   setStatus(`Saved ${active}`);
-  changed = await window.api.gitStatus(root).catch(() => changed);
+  changed = await api.gitStatus(root).catch(() => changed);
   if (mode === 'changes') renderSidebar();
 }
 
 // ---- Events ----
 $('btn-open').onclick = async () => {
-  const p = await window.api.openFolder();
+  const p = await api.openFolder();
   if (p) openRoot(p);
 };
 $('tab-files').onclick = () => {
@@ -389,15 +368,15 @@ $('tab-files').onclick = () => {
 };
 $('tab-changes').onclick = async () => {
   mode = 'changes';
-  if (root && (await window.api.gitIsRepo(root))) {
-    changed = await window.api.gitStatus(root);
+  if (root && (await api.gitIsRepo(root))) {
+    changed = await api.gitStatus(root);
   }
   renderSidebar();
 };
 $('search').addEventListener('keydown', async (e) => {
   const input = e.target as HTMLInputElement;
   if (e.key === 'Enter' && root && input.value.trim()) {
-    searchHits = await window.api.search(root, input.value.trim());
+    searchHits = await api.search(root, input.value.trim());
     mode = 'search';
     renderSidebar();
     setStatus(`${searchHits.length} matches for "${input.value.trim()}"`);
@@ -437,3 +416,30 @@ if (bootRoot) openRoot(bootRoot);
   // Signal for automated smoke tests that the renderer booted.
   (window as unknown as { __ready: boolean }).__ready = true;
 })();
+
+// ---- E2E hook (only with ?e2e=1): exposes app internals to the driver in
+// e2e/driver.js so every shipped feature can be asserted headlessly.
+if (new URLSearchParams(location.search).has('e2e')) {
+  e2eReady().catch(() => undefined);
+  (window as unknown as { __e2e: unknown }).__e2e = {
+    api,
+    e2eReport,
+    monaco,
+    editor: () => editor,
+    diffEditor: () => diffEditor,
+    openRoot,
+    openFile,
+    openDiff,
+    closeTab,
+    saveActive,
+    stepChange,
+    state: () => ({
+      root,
+      tabs: tabs.map((t) => t.path),
+      active,
+      viewingDiff,
+      mode,
+      changed: changed.map((c) => c.path),
+    }),
+  };
+}

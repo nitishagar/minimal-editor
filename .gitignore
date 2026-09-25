@@ -3,6 +3,7 @@ dist/
 out/
 *.log
 .DS_Store
+src-tauri/target/
 # Local workflow attachments (relative symlinks into ../claude-files);
 # each contributor runs claude-files/attach.sh themselves.
 .claude/
