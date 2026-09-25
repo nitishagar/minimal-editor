@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="minimal-editor: a tiny, fast, VS Code-familiar editor for reviewing code changes. No extensions, no telemetry, no agent upsell." />
+  <title>minimal-editor — look at code changes, nothing else</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-head">
+    <div class="wrap head-row">
+      <a class="brand" href="#">minimal-editor</a>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#performance">Performance</a>
+        <a href="#install">Install</a>
+        <a href="#proof">No-agent proof</a>
+        <a href="https://github.com/nitishagar/minimal-editor">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <h1>Open a repo.<br />See the diff.<br />Close it.</h1>
+          <p class="lede">A 7&nbsp;MB editor for the most common 30 seconds of your day:
+            someone changed code and you just want to look. VS Code's editing
+            engine, four features, and zero popups asking you to try an agent.</p>
+          <p class="cta-row">
+            <a class="btn primary" href="#install">Install in 3 commands</a>
+            <a class="btn" href="https://github.com/nitishagar/minimal-editor">Source on GitHub</a>
+          </p>
+          <ul class="facts">
+            <li><strong>~1.1 s</strong> cold boot</li>
+            <li><strong>0</strong> network calls</li>
+            <li><strong>0</strong> extensions, accounts, prompts</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <img src="demo.gif" alt="Demo: browse files, open a side-by-side diff, step through changes, search" />
+          <figcaption>Real recording: tree → diff → <kbd>[</kbd> <kbd>]</kbd> stepping → search.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Four features, each one finished</h2>
+        <dl class="feature-list">
+          <div>
+            <dt>Files</dt>
+            <dd>Folder tree, tabs with dirty dots, syntax highlighting for 20+ languages, save. Keyboard-first: <kbd>Ctrl+O</kbd> open, <kbd>Ctrl+S</kbd> save, <kbd>Ctrl+W</kbd> close.</dd>
+          </div>
+          <div>
+            <dt>Changes</dt>
+            <dd>Git status list with M/D/R/?? badges and true side-by-side diffs against <code>HEAD</code>. Step through every changed file with <kbd>[</kbd> and <kbd>]</kbd> without touching the mouse.</dd>
+          </div>
+          <div>
+            <dt>Search</dt>
+            <dd>One box for filename and content search across the project, capped and instant. <kbd>Enter</kbd> to run, <kbd>Esc</kbd> to clear.</dd>
+          </div>
+          <div>
+            <dt>Nothing else</dt>
+            <dd>No marketplace, terminal, debugger, sync, telemetry, update nag, or AI sidebar. What ships is what you see — about 2,000 lines of app code.</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="performance">
+      <div class="wrap">
+        <h2>Small and fast, measured</h2>
+        <table>
+          <thead><tr><th>Metric</th><th>minimal-editor</th><th>Full VS Code</th></tr></thead>
+          <tbody>
+            <tr><td>Cold boot to interactive</td><td>~1.1 s</td><td>2–5 s</td></tr>
+            <tr><td>Install size (Linux .deb)</td><td>4 MB</td><td>~350 MB</td></tr>
+            <tr><td>Full test suite (boot + 14 feature cases)</td><td>~1.9 s</td><td>—</td></tr>
+            <tr><td>Background processes when idle</td><td>0</td><td>extension host, file watcher, sync</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Measured on Ubuntu, release build. The shell is Tauri (system webview + Rust); the editor is Monaco — VS Code's own engine.</p>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="wrap">
+        <h2>Install</h2>
+        <h3>From source (Linux, macOS, Windows)</h3>
+        <pre><code>git clone https://github.com/nitishagar/minimal-editor.git
+cd minimal-editor
+npm install &amp;&amp; npm run build &amp;&amp; npm start</code></pre>
+        <p>Requires Node.js 20+, Rust stable, and git. Linux also needs the
+          <a href="https://v2.tauri.app/start/prerequisites/">Tauri prerequisites</a>
+          (<code>libwebkit2gtk-4.1-dev</code> etc.). Installers land in
+          <code>src-tauri/target/release/bundle/</code>.</p>
+        <h3>Prebuilt binaries</h3>
+        <p>Every push builds signed-by-CI installers for all three platforms —
+          <code>.deb</code> / <code>.rpm</code> / <code>.AppImage</code>,
+          <code>.dmg</code>, <code>.msi</code> — attached to the
+          <a href="https://github.com/nitishagar/minimal-editor/actions">release workflow artifacts</a>.</p>
+      </div>
+    </section>
+
+    <section id="proof">
+      <div class="wrap">
+        <h2>How we prove "no agent spam"</h2>
+        <p>Not a setting. Not a promise. Structural facts, each enforced in CI:</p>
+        <ol class="proof-list">
+          <li><strong>Ban gate.</strong> <code>scripts/ban-gate.sh</code> fails the build if any telemetry, agent, or experiment string — or any remote URL — appears in app source.</li>
+          <li><strong>No HTTP stack.</strong> The Rust backend has zero HTTP client crates; the gate fails the build if one is ever added. The app <em>cannot</em> phone home.</li>
+          <li><strong>Locked-down webview.</strong> Strict CSP (<code>default-src 'self'</code>, no object/base escapes), no new windows, navigation pinned to local files.</li>
+          <li><strong>E2E verifies it.</strong> The headless suite asserts every shipped feature works <em>and</em> that zero remote resources load.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>Questions</h2>
+        <dl class="feature-list">
+          <div>
+            <dt>Why not just fork VS Code?</dt>
+            <dd>A full Code-OSS build drags the extension host, marketplace, sync, experiments, and agent surfaces with it — subtracting that back down fights the codebase and still ships its weight. Starting from Monaco + a bare shell adds up to 7 MB instead.</dd>
+          </div>
+          <div>
+            <dt>Is the editor "real" VS Code editing?</dt>
+            <dd>Yes — Monaco is the editor extracted from VS Code, same models, edits, undo stack, and diff engine. The e2e suite drives those exact code paths.</dd>
+          </div>
+          <div>
+            <dt>Will you add extensions / terminal / debugging?</dt>
+            <dd>No. That roadmap already exists and it's called VS Code. This tool stays four features.</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot-row">
+      <span>minimal-editor · MIT licensed</span>
+      <span><a href="https://github.com/nitishagar/minimal-editor">GitHub</a> · <a href="https://github.com/nitishagar/minimal-editor/actions">CI &amp; binaries</a></span>
+    </div>
+  </footer>
+</body>
+</html>

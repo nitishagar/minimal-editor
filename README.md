@@ -3,6 +3,8 @@
 A minimal, fast, VS Code–familiar editor for quickly looking at code changes.
 No extensions. No telemetry. No agent upsell popups. Ever.
 
+**Docs & download:** https://nitishagar.github.io/minimal-editor/
+
 Built on the same editing engine as VS Code ([Monaco](https://github.com/microsoft/monaco-editor))
 inside a tiny [Tauri](https://github.com/tauri-apps/tauri) shell (system webview + Rust)
 — with only four features:
@@ -11,6 +13,8 @@ inside a tiny [Tauri](https://github.com/tauri-apps/tauri) shell (system webview
 - **Changes** — git status list, side-by-side diffs, `[` / `]` to step through changes
 - **Search** — filename + content search across the project (Enter)
 - **Nothing else** — no accounts, no marketplace, no update prompts, no network calls
+
+![minimal-editor demo: open a file, review diffs, step through changes, search](docs/demo.gif)
 
 The app makes no network calls: there are no HTTP client crates in the Rust
 backend, no remote URLs in source, and a strict CSP. CI runs a **ban gate**
