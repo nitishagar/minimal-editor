@@ -7,10 +7,10 @@
   "scripts": {
     "build:web": "vite build",
     "dev:web": "vite --port 1420 --strictPort",
-    "dev": ". ./scripts/env.sh && tauri dev",
-    "build": ". ./scripts/env.sh && tauri build",
-    "e2e": ". ./scripts/env.sh && tauri dev -- -- --e2e",
-    "test:rs": ". ./scripts/env.sh && cargo test --manifest-path src-tauri/Cargo.toml",
+    "dev": "node scripts/with-env.mjs tauri dev",
+    "build": "node scripts/with-env.mjs tauri build",
+    "e2e": "node scripts/with-env.mjs tauri dev -- -- --e2e",
+    "test:rs": "node scripts/with-env.mjs cargo test --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
     "ban-gate": "bash scripts/ban-gate.sh",
     "test": "npm run ban-gate && npm run typecheck && npm run test:rs"
