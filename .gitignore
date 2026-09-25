@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+# Local workflow attachments (relative symlinks into ../claude-files);
+# each contributor runs claude-files/attach.sh themselves.
+.claude/
+.zcode/
